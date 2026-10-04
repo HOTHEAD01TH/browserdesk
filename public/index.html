@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>BrowserDesk</title>
+  <style>
+    :root { color-scheme: light; --ink: #1d1a17; --paper: #f3efe6; --line: #ddd4c4; --mark: #8c3a2f; }
+    body { margin: 0; font: 16px/1.45 "Iowan Old Style", Palatino, Georgia, serif; background: var(--paper); color: var(--ink); }
+    main { max-width: 880px; margin: 0 auto; padding: 28px 20px 64px; }
+    h1 { margin: 0 0 8px; }
+    #banner { min-height: 1.4em; font-weight: 700; color: var(--mark); }
+    article { background: #fff; border: 1px solid var(--line); padding: 12px 14px; margin: 10px 0; }
+    button { font: inherit; padding: 6px 12px; background: var(--ink); color: var(--paper); border: 0; cursor: pointer; }
+    ol { padding-left: 18px; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>BrowserDesk</h1>
+  <p>Job queue. Laya picks the next action from navigate, extract, or stop. Steps run on a local page graph. A job that asks to pay is rejected. No logged-in browser is driven.</p>
+  <p id="banner" role="status">Laya not running</p>
+  <div id="list"></div>
+</main>
+<script>
+const banner = document.querySelector("#banner");
+const list = document.querySelector("#list");
+
+function render(jobs) {
+  list.replaceChildren();
+  for (const job of jobs) {
+    const art = document.createElement("article");
+    const h = document.createElement("h2");
+    h.textContent = job.goal;
+    const status = document.createElement("p");
+    status.textContent = "status: " + job.status;
+    const result = document.createElement("p");
+    if (job.error === "Laya not running") result.textContent = "Laya not running";
+    else if (job.result) result.textContent = job.result;
+    const cost = document.createElement("p");
+    if (job.cost) {
+      const usage = job.usage ? " usage input_tokens=" + job.usage.input_tokens + " output_tokens=" + job.usage.output_tokens : "";
+      cost.textContent = job.cost + usage;
+    }
+    const steps = document.createElement("ol");
+    for (const step of job.steps || []) {
+      const li = document.createElement("li");
+      li.textContent = step.action + " " + step.detail;
+      steps.append(li);
+    }
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.textContent = "Run";
+    btn.addEventListener("click", async () => {
+      const res = await fetch("/api/jobs/" + job.id + "/run", { method: "POST" });
+      const data = await res.json();
+      if (data.job?.error === "Laya not running") banner.textContent = "Laya not running";
+      await load();
+    });
+    art.append(h, status, result, cost, steps, btn);
+    list.append(art);
+  }
+}
+
+async function load() {
+  const res = await fetch("/api/jobs");
+  render((await res.json()).jobs);
+}
+async function health() {
+  const res = await fetch("/api/health");
+  const data = await res.json();
+  if (data.error === "Laya not running") banner.textContent = "Laya not running";
+  else if (banner.textContent === "Laya not running") banner.textContent = "";
+}
+health();
+load();
+setInterval(health, 3000);
+</script>
+</body>
+</html>
